@@ -1,0 +1,670 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "The AWS CloudFormation template for this Serverless application",
+  "Resources": {
+    "ModerateVideoLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/moderate-vid-poc-moderateVideo",
+        "RetentionInDays": 1
+      }
+    },
+    "GetResultLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/moderate-vid-poc-getResult",
+        "RetentionInDays": 1
+      }
+    },
+    "IamRoleLambdaExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "-",
+                [
+                  "moderate-vid",
+                  "poc",
+                  "lambda"
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:CreateLogGroup"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/moderate-vid-poc*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/moderate-vid-poc*:*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${SrcQueue.Arn}"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "moderate-vid",
+              "poc",
+              {
+                "Ref": "AWS::Region"
+              },
+              "lambdaRole"
+            ]
+          ]
+        }
+      }
+    },
+    "ModerateVideoLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "${LambdaFunctionsBucket}"
+          },
+          "S3Key": {
+            "Fn::Sub": "${ModerateVideoLambdaFunctionKey}"
+          }
+        },
+        "FunctionName": "moderate-vid-poc-moderateVideo",
+        "Handler": ".bin/moderateVideo",
+        "MemorySize": 768,
+        "Role": {
+          "Fn::GetAtt": [
+            "ModerateVideoIamRoleLambdaExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": {
+          "Fn::Sub": "${LambdaFunctionsRuntime}"
+        },
+        "Timeout": 10,
+        "Environment": {
+          "Variables": {
+            "MinConfidenceParamName": {
+              "Fn::Sub": "/moderate-vid/${Stage}/MinConfidence"
+            },
+            "SrcBucketName": {
+              "Fn::Sub": "moderate-vid-${Stage}"
+            },
+            "ResultRoleArn": {
+              "Fn::Sub": "${ResultRole.Arn}"
+            },
+            "ResultTopicArn": {
+              "Fn::Sub": "${ResultTopic}"
+            }
+          }
+        }
+      },
+      "DependsOn": [
+        "ModerateVideoIamRoleLambdaExecution",
+        "ModerateVideoLogGroup"
+      ]
+    },
+    "ModerateVideoLambdaVersionV1C7Y3gYRCLNnbaJo6TvLftlaWrPsyGxhZnDMLXnuys": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ModerateVideoLambdaFunction"
+        },
+        "CodeSha256": "kPHODy7H41efKjaC+/iP8VwEtRNma9bo5FxxGk1GFFw="
+      }
+    },
+    "GetResultLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "${LambdaFunctionsBucket}"
+          },
+          "S3Key": {
+            "Fn::Sub": "${GetResultLambdaFunctionKey}"
+          }
+        },
+        "FunctionName": "moderate-vid-poc-getResult",
+        "Handler": ".bin/getResult",
+        "MemorySize": 768,
+        "Role": {
+          "Fn::GetAtt": [
+            "GetResultIamRoleLambdaExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": {
+          "Fn::Sub": "${LambdaFunctionsRuntime}"
+        },
+        "Timeout": 10,
+        "Environment": {
+          "Variables": {
+            "AlertTopicArn": {
+              "Fn::Sub": "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AlertTopic}"
+            }
+          }
+        }
+      },
+      "DependsOn": [
+        "GetResultIamRoleLambdaExecution",
+        "GetResultLogGroup"
+      ]
+    },
+    "GetResultLambdaVersionBmv9nfgdrbDKh7VNVP5ezzhlwZJzXnbUL14vOHNkec": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "GetResultLambdaFunction"
+        },
+        "CodeSha256": "ZElhhy8WT6debORBt/kLTH5NWbtXeINDMvgjrAcuSTw="
+      }
+    },
+    "GetResultSnsSubscriptionModeratevid": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "TopicArn": {
+          "Ref": "ResultTopic"
+        },
+        "Protocol": "lambda",
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "GetResultLambdaFunction",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "GetResultLambdaPermissionModeratevidSNS": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "GetResultLambdaFunction",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "ResultTopic"
+        }
+      }
+    },
+    "ModerateVideoEventSourceMappingSQSSrcQueueArn": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "DependsOn": "ModerateVideoIamRoleLambdaExecution",
+      "Properties": {
+        "BatchSize": 10,
+        "EventSourceArn": {
+          "Fn::Sub": "${SrcQueue.Arn}"
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "ModerateVideoLambdaFunction",
+            "Arn"
+          ]
+        },
+        "Enabled": true
+      }
+    },
+    "ModerateVideoIamRoleLambdaExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "-",
+                [
+                  "moderate-vid",
+                  "poc",
+                  "lambda"
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/moderate-vid-poc-moderateVideo:*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${SrcQueue.Arn}"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/moderate-vid/${Stage}/MinConfidence"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${SrcBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ResultRole.Arn}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rekognition:StartContentModeration"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "moderate-vid",
+              "poc",
+              "moderateVideo",
+              {
+                "Ref": "AWS::Region"
+              },
+              "lambdaRole"
+            ]
+          ]
+        },
+        "ManagedPolicyArns": []
+      }
+    },
+    "GetResultIamRoleLambdaExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "-",
+                [
+                  "moderate-vid",
+                  "poc",
+                  "lambda"
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/moderate-vid-poc-getResult:*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rekognition:GetContentModeration"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AlertTopic}"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "moderate-vid",
+              "poc",
+              "getResult",
+              {
+                "Ref": "AWS::Region"
+              },
+              "lambdaRole"
+            ]
+          ]
+        },
+        "ManagedPolicyArns": []
+      }
+    },
+    "MinConfidenceParam": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/moderate-vid/${Stage}/MinConfidence"
+        },
+        "Type": "String",
+        "Value": "80"
+      }
+    },
+    "ResultTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "moderate-vid-${Stage}"
+        }
+      }
+    },
+    "ResultPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sns:Publish"
+              ],
+              "Resource": {
+                "Fn::Sub": "${ResultTopic}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ResultRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rekognition.amazonaws.com"
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "${ResultPolicy}"
+          }
+        ]
+      }
+    },
+    "SrcBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "moderate-vid-${Stage}"
+        },
+        "NotificationConfiguration": {
+          "QueueConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Queue": {
+                "Fn::Sub": "${SrcQueue.Arn}"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 2,
+              "Status": "Enabled"
+            }
+          ]
+        }
+      }
+    },
+    "SrcBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Fn::Sub": "moderate-vid-${Stage}"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Principal": {
+                "Service": "rekognition.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::Sub": "${SrcBucket.Arn}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SrcQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "moderate-vid-${Stage}-src"
+        },
+        "MessageRetentionPeriod": 172800,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::Sub": "${DLQueue.Arn}"
+          },
+          "maxReceiveCount": 720
+        }
+      }
+    },
+    "SrcQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Fn::Sub": "${SrcQueue}"
+          }
+        ],
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::Sub": "${SrcQueue.Arn}"
+              },
+              "Condition": {
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::moderate-vid-${Stage}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "DLQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "moderate-vid-${Stage}-dl"
+        },
+        "MessageRetentionPeriod": 129600
+      }
+    }
+  },
+  "Outputs": {
+    "ModerateVideoLambdaFunctionQualifiedArn": {
+      "Description": "Current Lambda function version",
+      "Value": {
+        "Ref": "ModerateVideoLambdaVersionV1C7Y3gYRCLNnbaJo6TvLftlaWrPsyGxhZnDMLXnuys"
+      }
+    },
+    "GetResultLambdaFunctionQualifiedArn": {
+      "Description": "Current Lambda function version",
+      "Value": {
+        "Ref": "GetResultLambdaVersionBmv9nfgdrbDKh7VNVP5ezzhlwZJzXnbUL14vOHNkec"
+      }
+    }
+  },
+  "Parameters": {
+    "Stage": {
+      "Type": "String",
+      "Default": "poc",
+      "Description": "the stage for deployment (poc, dev, prod, etc)"
+    },
+    "AlertTopic": {
+      "Type": "String",
+      "Default": "moderate-poc",
+      "Description": "the topic name to which this service will publish moderation alerts"
+    },
+    "LambdaFunctionsRuntime" : {
+      "Type" : "String",
+      "AllowedValues" : ["nodejs12.x", "python3.8", "ruby2.7", "java11", "go1.x", "dotnetcore3.1"],
+      "Description" : "the runtime of your lambda function packages"
+    },
+    "LambdaFunctionsBucket" : {
+      "Type" : "String",
+      "Description" : "the name of the bucket containing your lambda function packages"
+    },
+    "ModerateVideoLambdaFunctionKey" : {
+      "Type" : "String",
+      "Description" : "the key identifying your ModerateImage lambda function package"
+    },
+    "GetResultLambdaFunctionKey" : {
+      "Type" : "String",
+      "Description" : "the key identifying your GetResult lambda function package"
+    }
+  }
+}
